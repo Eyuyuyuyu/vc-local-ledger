@@ -1,0 +1,106 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+PROJECT GOAL
+- 构建“本地家庭记账”工具：按日期与分类的高效记账，移动端/网页端适用。
+- 完全本地运行（离线优先），不依赖网络或后端数据库。
+
+SCOPE & NON-GOALS
+- 仅使用浏览器本地存储（IndexedDB + localStorage 作为回退）。
+- 不做云同步、多端协同（可作为后续增强）。
+- 只做支出记账与统计，不包含复杂账务（如复式记账、资产负债）。
+
+TECH STACK & PROJECT SETUP
+- 前端框架：优先 React + Vite（可替换为 Vue/Svelte，但需等价简洁）。
+- PWA：添加 manifest 与 Service Worker，静态资源缓存，离线可用。
+- 依赖：尽量轻量。数据层建议 `idb` 或 `Dexie`，图表优先 SVG/Canvas 轻量方案。
+
+DATA MODEL
+- 记录：{ id, date, categoryId, amount, note, createdAt, updatedAt, version }
+- 分类：{ id, name, icon, color, sort }
+- 版本管理：维护数据版本号，提供轻量迁移（不可破坏旧数据）。
+
+STORAGE LAYER
+- 封装本地数据层：CRUD、批量导入导出（JSON/CSV）、备份/恢复文件。
+- 提供按日期、分类、日期范围的查询与分页；索引字段优化查询。
+- 严禁在未必要时频繁读写；合并写入、节流/去抖。
+
+FEATURES (DELIVER IN THIS ORDER)
+1) 基础框架 + PWA + 主题系统骨架（浅/深色）
+2) 数据层封装（IndexedDB + 回退）与模型校验
+3) 记录录入（日期选择、分类选择、金额数字键盘、备注）
+4) 列表视图（按日/周/月切换，搜索与筛选）
+5) 分类视图（分类汇总、占比、排行榜）
+6) 统计图表（趋势/占比，轻量实现）
+7) 数据导入导出（JSON/CSV），本地备份/恢复
+8) 设置中心（货币/小数位、日期格式、语言、本地化）
+9) 分类管理（新增/排序/隐藏/颜色与图标）
+10) 可选安全（本地 PIN）、隐私模式（金额模糊）
+11) 测试与性能基准（单元 + 端到端）
+12) 发布与版本号、变更日志、安装引导（PWA）
+
+UI/UX & THEME
+- 轻量、美观、简洁；移动端优先布局（底部导航、手势操作）。
+- 集中 UI 配置：`/src/ui/config.ts`（色板、字号、圆角、间距、阴影、半径）。
+- 交互：空状态、错误提示、表单校验；触控优化（滑动删除、长按多选）。
+- 无障碍：对比度、键盘操作、ARIA、可读标签。
+
+PERFORMANCE
+- 大列表虚拟化；筛选/搜索去抖（>=150ms）；只在必要范围内重渲染。
+- 代码分割与按需加载；首屏关键路径最小化。
+- 本地查询建立索引，避免全表扫描；热路径使用内存缓存（同会话）。
+
+OFFLINE-FIRST & CACHING
+- Service Worker：静态资源缓存策略（Stale-While-Revalidate）。
+- 数据完全离线可用；仅资源更新走网络。
+- 启动加速：延迟加载非核心模块；预加载常用分类与最近月份数据。
+
+QUALITY & TESTING
+- Lint/Format：ESLint + Prettier，保持统一风格。
+- 单元测试：数据层、聚合与统计计算、日期边界。
+- E2E：新增记录、筛选、导出/导入、离线场景。
+- 性能基准：大列表渲染、筛选速度、导出速度。
+
+SECURITY & PRIVACY
+- 数据仅保存在本地；可选本地 PIN（WebCrypto 轻量加密）。
+- 隐私模式：金额模糊/隐藏切换；屏幕截图防护提示（非强制）。
+
+DEV WORKFLOW IN CURSOR
+- 每个功能开始前：对照“Features”顺序创建/更新 TODO；一次只推进当前功能。
+- 变更前先读取相关文件上下文，避免重复或风格漂移；保持文件缩进风格不变。
+- 中等及以上变更：先创建 TODO 清单（高层），每完成一步就勾选。
+- 工具使用偏好：批量并行读取/搜索；仅在依赖关系需要时顺序执行。
+- 任何文件编辑前后：自检构建/类型/Lint；必要时补足轻量测试。
+
+COMMIT POLICY (MANDATORY)
+- 每完成一个功能（最小可用增量）就自动生成并建议一个 git commit message。
+- 使用 Conventional Commits，必要时添加范围与简短中文说明：
+  - feat(scope): 描述
+  - fix(scope): 描述
+  - perf(scope): 描述
+  - refactor(scope): 描述
+  - chore(scope): 描述
+  - test(scope): 描述
+- 示例：
+  - feat(data): 建立 IndexedDB 封装与基本 CRUD
+  - feat(ui): 初版记录录入表单与移动端数字键盘
+  - perf(list): 列表虚拟化并优化筛选去抖
+  - fix(export): 修正 CSV 编码与小数位格式
+- 提交信息需简短明确，若涉及破坏性变更需加 BREAKING CHANGE 段落。
+
+DONE DEFINITION
+- 功能可被端到端路径使用，UI 可操作，数据可持久化与恢复。
+- 通过基本测试与 Lint，满足性能阈值（渲染与查询在感知瞬时范围内）。
+- 有用户可读的微型说明（变更日志或内置提示）。
+
+NON-REGRESSION
+- 变更不得破坏离线与本地数据；发布前验证导入导出兼容。
+- 任何存储结构调整必须包含迁移与回滚策略。
+
+DOCUMENTATION
+- 在 `README.md` 维护：
+  - 使用指南（安装到主屏、导入导出、离线提示）
+  - 功能概览与快捷操作
+  - 数据模型/存储位置与备份策略
