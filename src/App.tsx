@@ -31,6 +31,7 @@ function App() {
   const [listError, setListError] = useState<string>('')
   const [pageSize] = useState<number>(50)
   const [visibleCount, setVisibleCount] = useState<number>(50)
+  const [tab, setTab] = useState<'list' | 'category'>('list')
 
   useEffect(() => {
     setTheme(theme)
@@ -130,6 +131,24 @@ function App() {
     return keys.map((d) => ({ date: d, total: map.get(d)!.total, items: map.get(d)!.items }))
   }, [records, visibleCount])
 
+  // aggregate by category for current range and filters (search, category filter applied upstream)
+  const categoryAgg = useMemo(() => {
+    const sumByCat = new Map<string, number>()
+    let grand = 0
+    for (const r of records) {
+      const s = sumByCat.get(r.categoryId) || 0
+      const next = s + r.amount
+      sumByCat.set(r.categoryId, next)
+      grand += r.amount
+    }
+    const rows = categories.map((c) => ({
+      category: c,
+      total: sumByCat.get(c.id) || 0,
+    })).filter((x) => x.total > 0)
+    rows.sort((a, b) => b.total - a.total)
+    return { total: grand, rows }
+  }, [records, categories])
+
   const amountNumber = useMemo(() => {
     const n = parseFloat(amountInput)
     return Number.isFinite(n) ? n : 0
@@ -189,6 +208,24 @@ function App() {
         </button>
       </div>
 
+      {/* View tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }} role="tablist" aria-label="视图">
+        {([
+          { key: 'list', label: '列表' },
+          { key: 'category', label: '分类' },
+        ] as const).map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            style={{ fontWeight: tab === t.key ? 700 : 400 }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* List view controls */}
       <section style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -241,37 +278,85 @@ function App() {
         </div>
       </section>
 
-      {/* List view */}
-      <section style={{ display: 'grid', gap: 12, marginBottom: 24 }}>
-        {loadingList && <div>加载中…</div>}
-        {listError && <div role="alert">加载失败：{listError}</div>}
-        {!loadingList && !listError && grouped.length === 0 && (
-          <div>暂无记录</div>
-        )}
-        {!loadingList && !listError && grouped.map((g) => (
-          <div key={g.date} style={{ border: '1px solid var(--border, #ddd)', borderRadius: 8, padding: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <strong>{g.date}</strong>
-              <span>合计：{g.total.toFixed(2)}</span>
+      {/* Conditional views */}
+      {tab === 'list' ? (
+        <section style={{ display: 'grid', gap: 12, marginBottom: 24 }}>
+          {loadingList && <div>加载中…</div>}
+          {listError && <div role="alert">加载失败：{listError}</div>}
+          {!loadingList && !listError && grouped.length === 0 && (
+            <div>暂无记录</div>
+          )}
+          {!loadingList && !listError && grouped.map((g) => (
+            <div key={g.date} style={{ border: '1px solid var(--border, #ddd)', borderRadius: 8, padding: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <strong>{g.date}</strong>
+                <span>合计：{g.total.toFixed(2)}</span>
+              </div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+                {g.items.map((r) => (
+                  <li key={r.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>
+                      {categories.find((c) => c.id === r.categoryId)?.icon || ''}
+                      <span style={{ marginLeft: 6 }}>{categories.find((c) => c.id === r.categoryId)?.name || r.categoryId}</span>
+                      {r.note ? <span style={{ marginLeft: 8, opacity: 0.7 }}>· {r.note}</span> : null}
+                    </span>
+                    <strong>{r.amount.toFixed(2)}</strong>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-              {g.items.map((r) => (
-                <li key={r.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>
-                    {categories.find((c) => c.id === r.categoryId)?.icon || ''}
-                    <span style={{ marginLeft: 6 }}>{categories.find((c) => c.id === r.categoryId)?.name || r.categoryId}</span>
-                    {r.note ? <span style={{ marginLeft: 8, opacity: 0.7 }}>· {r.note}</span> : null}
-                  </span>
-                  <strong>{r.amount.toFixed(2)}</strong>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-        {!loadingList && !listError && visibleCount < records.length && (
-          <button type="button" onClick={() => setVisibleCount((v) => v + pageSize)}>加载更多</button>
-        )}
-      </section>
+          ))}
+          {!loadingList && !listError && visibleCount < records.length && (
+            <button type="button" onClick={() => setVisibleCount((v) => v + pageSize)}>加载更多</button>
+          )}
+        </section>
+      ) : (
+        <section style={{ display: 'grid', gap: 12, marginBottom: 24 }} aria-live="polite">
+          {loadingList && <div>加载中…</div>}
+          {listError && <div role="alert">加载失败：{listError}</div>}
+          {!loadingList && !listError && categoryAgg.rows.length === 0 && (
+            <div>暂无数据</div>
+          )}
+          {!loadingList && !listError && categoryAgg.rows.length > 0 && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <strong>总计</strong>
+                <strong>{categoryAgg.total.toFixed(2)}</strong>
+              </div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 10 }}>
+                {categoryAgg.rows.map(({ category, total }) => {
+                  const pct = categoryAgg.total > 0 ? (total / categoryAgg.total) * 100 : 0
+                  return (
+                    <li key={category.id} style={{ display: 'grid', gap: 6 }} aria-label={`${category.name} 占比 ${pct.toFixed(0)}%`}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <span>
+                          {category.icon}
+                          <span style={{ marginLeft: 6 }}>{category.name}</span>
+                        </span>
+                        <span>
+                          <strong style={{ marginRight: 8 }}>{total.toFixed(2)}</strong>
+                          <span style={{ opacity: 0.7 }}>{pct.toFixed(0)}%</span>
+                        </span>
+                      </div>
+                      <div style={{ height: 8, background: 'var(--surface-2, #f0f0f0)', borderRadius: 999 }}>
+                        <div
+                          style={{
+                            width: `${Math.max(4, pct)}%`,
+                            height: '100%',
+                            background: category.color,
+                            borderRadius: 999,
+                            transition: 'width 200ms ease-out',
+                          }}
+                        />
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
       <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12 }}>
         <label style={{ display: 'grid', gap: 6 }}>
