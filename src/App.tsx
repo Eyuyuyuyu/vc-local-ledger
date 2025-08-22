@@ -31,7 +31,7 @@ function App() {
   const [listError, setListError] = useState<string>('')
   const [pageSize] = useState<number>(50)
   const [visibleCount, setVisibleCount] = useState<number>(50)
-  const [tab, setTab] = useState<'list' | 'category'>('list')
+  const [tab, setTab] = useState<'list' | 'category' | 'charts'>('list')
 
   useEffect(() => {
     setTheme(theme)
@@ -213,6 +213,7 @@ function App() {
         {([
           { key: 'list', label: '列表' },
           { key: 'category', label: '分类' },
+          { key: 'charts', label: '图表' },
         ] as const).map((t) => (
           <button
             key={t.key}
@@ -278,6 +279,11 @@ function App() {
         </div>
       </section>
 
+      {/* 计算图表数据 */}
+      {(() => {
+        return null
+      })()}
+
       {/* Conditional views */}
       {tab === 'list' ? (
         <section style={{ display: 'grid', gap: 12, marginBottom: 24 }}>
@@ -310,7 +316,7 @@ function App() {
             <button type="button" onClick={() => setVisibleCount((v) => v + pageSize)}>加载更多</button>
           )}
         </section>
-      ) : (
+      ) : tab === 'category' ? (
         <section style={{ display: 'grid', gap: 12, marginBottom: 24 }} aria-live="polite">
           {loadingList && <div>加载中…</div>}
           {listError && <div role="alert">加载失败：{listError}</div>}
@@ -354,6 +360,139 @@ function App() {
                 })}
               </ul>
             </div>
+          )}
+        </section>
+      ) : (
+        // charts view
+        <section style={{ display: 'grid', gap: 16, marginBottom: 24 }}>
+          {loadingList && <div>加载中…</div>}
+          {listError && <div role="alert">加载失败：{listError}</div>}
+          {!loadingList && !listError && (
+            <>
+              {/* 折线趋势图：按日合计 */}
+              {(() => {
+                // 生成当前区间内的日期数组
+                const dates: string[] = []
+                const start = new Date(range.start + 'T00:00:00')
+                const end = new Date(range.end + 'T00:00:00')
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                  const yyyy = d.getFullYear()
+                  const mm = String(d.getMonth() + 1).padStart(2, '0')
+                  const dd = String(d.getDate()).padStart(2, '0')
+                  dates.push(`${yyyy}-${mm}-${dd}`)
+                }
+                const sumByDate = new Map<string, number>()
+                for (const r of records) {
+                  sumByDate.set(r.date, (sumByDate.get(r.date) || 0) + r.amount)
+                }
+                const series = dates.map((d) => sumByDate.get(d) || 0)
+                const maxY = series.length ? Math.max(...series) : 0
+                const width = 360
+                const height = 140
+                const paddingLeft = 24
+                const paddingRight = 8
+                const paddingTop = 12
+                const paddingBottom = 24
+                const innerW = width - paddingLeft - paddingRight
+                const innerH = height - paddingTop - paddingBottom
+                const stepX = series.length > 1 ? innerW / (series.length - 1) : innerW
+                const scaleY = (v: number) => (maxY === 0 ? 0 : 1 - v / maxY) * innerH
+                const points = series.map((v, i) => `${paddingLeft + i * stepX},${paddingTop + scaleY(v)}`).join(' ')
+                const gridY = 4
+                const yTicks = Array.from({ length: gridY + 1 }, (_, i) => (maxY / gridY) * i)
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <strong>趋势（{mode === 'day' ? '日' : mode === 'week' ? '周' : '月'} 内按日合计）</strong>
+                      <span style={{ opacity: 0.7 }}>最大：{maxY.toFixed(2)}</span>
+                    </div>
+                    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="支出趋势折线图" style={{ width: '100%', height: 'auto' }}>
+                      {/* grid */}
+                      {yTicks.map((t, i) => {
+                        const y = paddingTop + (innerH / gridY) * i
+                        return <line key={i} x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="var(--border, #e5e5e5)" strokeWidth={1} />
+                      })}
+                      {/* area under line */}
+                      {series.length > 0 && (
+                        <polyline
+                          points={`${points} ${width - paddingRight},${paddingTop + innerH} ${paddingLeft},${paddingTop + innerH}`}
+                          fill="rgba(100, 149, 237, 0.15)"
+                          stroke="none"
+                        />
+                      )}
+                      {/* line */}
+                      {series.length > 0 && (
+                        <polyline points={points} fill="none" stroke="#6495ED" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                      )}
+                      {/* axes */}
+                      <line x1={paddingLeft} y1={paddingTop} x2={paddingLeft} y2={paddingTop + innerH} stroke="var(--border, #ccc)" />
+                      <line x1={paddingLeft} y1={paddingTop + innerH} x2={width - paddingRight} y2={paddingTop + innerH} stroke="var(--border, #ccc)" />
+                    </svg>
+                  </div>
+                )
+              })()}
+
+              {/* 环形占比图：分类占比 */}
+              {categoryAgg.rows.length > 0 ? (() => {
+                const size = 180
+                const radius = 70
+                const strokeW = 18
+                const center = size / 2
+                const circumference = 2 * Math.PI * radius
+                let acc = 0
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <strong>分类占比</strong>
+                      <span style={{ opacity: 0.7 }}>总计：{categoryAgg.total.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                      <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label="分类占比环形图" style={{ width: size, height: size }}>
+                        <g transform={`rotate(-90 ${center} ${center})`}>
+                          {/* background track */}
+                          <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--surface-2, #eee)" strokeWidth={strokeW} />
+                          {categoryAgg.rows.map(({ category, total }) => {
+                            const pct = categoryAgg.total > 0 ? total / categoryAgg.total : 0
+                            const dash = pct * circumference
+                            const dasharray = `${dash} ${circumference - dash}`
+                            const circle = (
+                              <circle
+                                key={category.id}
+                                cx={center}
+                                cy={center}
+                                r={radius}
+                                fill="none"
+                                stroke={category.color}
+                                strokeWidth={strokeW}
+                                strokeDasharray={dasharray}
+                                strokeDashoffset={-acc}
+                              />
+                            )
+                            acc += dash
+                            return circle
+                          })}
+                        </g>
+                        <text x={center} y={center} dominantBaseline="middle" textAnchor="middle" style={{ fontSize: 14, fontWeight: 600 }}>{Math.round(100).toString()}%</text>
+                      </svg>
+                      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6, minWidth: 160 }}>
+                        {categoryAgg.rows.map(({ category, total }) => {
+                          const pct = categoryAgg.total > 0 ? (total / categoryAgg.total) * 100 : 0
+                          return (
+                            <li key={category.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ width: 10, height: 10, background: category.color, borderRadius: 2 }} />
+                                <span>{category.icon} {category.name}</span>
+                              </span>
+                              <span style={{ whiteSpace: 'nowrap' }}>{pct.toFixed(0)}%</span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                )
+              })() : <div>暂无分类数据</div>}
+            </>
           )}
         </section>
       )}
