@@ -4,6 +4,7 @@ globs:
 alwaysApply: true
 ---
 PROJECT GOAL
+- 每次用中文回答，git commit message 用英文。
 - 构建“本地家庭记账”工具：按日期与分类的高效记账，移动端/网页端适用。
 - 完全本地运行（离线优先），不依赖网络或后端数据库。
 
@@ -75,7 +76,7 @@ DEV WORKFLOW IN CURSOR
 - 任何文件编辑前后：自检构建/类型/Lint；必要时补足轻量测试。
 
 COMMIT POLICY (MANDATORY)
-- 每完成一个功能（最小可用增量）就自动生成并建议一个 git commit message。
+- 每完成一个功能（最小可用增量）就自动生成并建议一个 git commit message 英文。
 - 使用 Conventional Commits，必要时添加范围与简短中文说明：
   - feat(scope): 描述
   - fix(scope): 描述
